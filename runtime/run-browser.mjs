@@ -15,12 +15,12 @@ import { join } from "node:path";
 import { pathToFileURL } from "node:url";
 import { report } from "./smoke.mjs";
 
-// The entry must live inside the project so esbuild resolves `sdk-v16` from
-// node_modules and `./smoke.mjs` relatively. Output goes to a temp dir.
+// The entry must live inside the project so esbuild resolves `sdk-candidate`
+// from node_modules and `./smoke.mjs` relatively. Output goes to a temp dir.
 const entryFile = join(import.meta.dirname, ".browser-entry.mjs");
 writeFileSync(
   entryFile,
-  `import * as sdk from "sdk-v16";
+  `import * as sdk from "sdk-candidate";
 import { runSmoke } from "./smoke.mjs";
 globalThis.__runSmoke = () => runSmoke(sdk);
 `,

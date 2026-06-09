@@ -14,11 +14,13 @@
     "perf": "node perf/run-perf.mjs",
     "net": "node perf/run-net.mjs",
     "size": "size-limit",
-    "size:why": "size-limit --why"
+    "size:why": "size-limit --why",
+    "set-versions": "node scripts/set-versions.mjs",
+    "sync-versions": "node scripts/sync-versions.mjs"
   },
   "dependencies": {
-    "sdk-v15": "npm:@stellar/stellar-sdk@15.1.0",
-    "sdk-v16": "npm:@stellar/stellar-sdk@16.0.0-rc.1"
+    "sdk-baseline": "npm:@stellar/stellar-sdk@15.1.0",
+    "sdk-candidate": "npm:@stellar/stellar-sdk@16.0.0-rc.1"
   },
   "devDependencies": {
     "@size-limit/preset-small-lib": "^11.2.0",

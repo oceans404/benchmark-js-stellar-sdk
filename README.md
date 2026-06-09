@@ -16,16 +16,16 @@ Everything runs against the **published packages** and is meant to be re-run on 
 
 ## Reports (the source of truth)
 
-The numbers live in these generated, committed reports. Read these for the actual data:
+The numbers live in these generated, committed reports. Each comparison gets its own folder, `reports/<candidate>-vs-<baseline>/`, so results from different version pairs are kept side by side. The current run:
 
 | Report | Question | Bottom line |
 | --- | --- | --- |
-| [`reports/bundle-report.md`](reports/bundle-report.md) | Smaller? | Yes, substantially. Tree-shaking helps but isn't surgical yet. |
-| [`reports/runtime-report.md`](reports/runtime-report.md) | Runs where I deploy? | Passes on Node, Bun, Deno, browser, and Cloudflare Workers. |
-| [`reports/perf-report.md`](reports/perf-report.md) | Faster? | Loads faster and most hot paths are faster; one keygen regression, plus a signing caveat. |
-| [`reports/network-report.md`](reports/network-report.md) | Transport: fetch vs axios? | v16's fetch client gets higher loopback throughput (largely connection reuse), but the network dominates in production. |
+| [`bundle-report.md`](reports/16.0.0-rc.1-vs-15.1.0/bundle-report.md) | Smaller? | Yes, substantially. Tree-shaking helps but isn't surgical yet. |
+| [`runtime-report.md`](reports/16.0.0-rc.1-vs-15.1.0/runtime-report.md) | Runs where I deploy? | Passes on Node, Bun, Deno, browser, and Cloudflare Workers. |
+| [`perf-report.md`](reports/16.0.0-rc.1-vs-15.1.0/perf-report.md) | Faster? | Loads faster and most hot paths are faster; one keygen regression, plus a signing caveat. |
+| [`network-report.md`](reports/16.0.0-rc.1-vs-15.1.0/network-report.md) | Transport: fetch vs axios? | The candidate's fetch client gets higher loopback throughput (largely connection reuse), but the network dominates in production. |
 
-> These are for `v16.0.0-rc.1` on a single machine and are directional. Re-run on your own hardware (and on stable v16) to confirm.
+> These are for `16.0.0-rc.1` vs `15.1.0` on a single machine and are directional. Re-run on your own hardware (and on stable v16) to confirm.
 
 ## What gets measured
 
@@ -48,26 +48,56 @@ The numbers live in these generated, committed reports. Read these for the actua
 
 ## Run it yourself
 
-v16 requires Node 22+; the committed reports were generated on Node 24 and `.nvmrc` pins v24 so reproductions match. Both SDK versions install side by side via npm aliases (`sdk-v15`, `sdk-v16`), so one install gets both.
+v16 requires Node 22+; the committed reports were generated on Node 24 and `.nvmrc` pins v24 so reproductions match. The two versions under comparison install side by side via npm aliases — `sdk-baseline` (compare-from) and `sdk-candidate` (under-test) — so one install gets both.
 
 ```bash
 nvm use            # Node 24 (matches the reports; v16 requires 22+)
 npm install        # both SDK versions + tooling
 
-npm run benchmark  # bundle sizes  -> reports/bundle-report.md
-npm run smoke      # runtime checks -> reports/runtime-report.md
-npm run perf       # v15-vs-v16 speed -> reports/perf-report.md
-npm run net        # transport: fetch vs axios -> reports/network-report.md
+# all four write into reports/<candidate>-vs-<baseline>/
+npm run benchmark  # bundle sizes
+npm run smoke      # runtime checks
+npm run perf       # baseline-vs-candidate speed
+npm run net        # transport: fetch vs axios
 
-npm run size       # optional: assert v16 bundles against .size-limit.json budgets
+npm run size       # optional: assert candidate bundles against .size-limit.json budgets
 ```
+
+### Changing the versions under test
+
+The versions are configured in **`versions.json`** (the source of truth):
+
+```json
+{ "baseline": "15.1.0", "candidate": "16.0.0-rc.1" }
+```
+
+`baseline` is what you compare from, `candidate` is what's under test. A bare version means `@stellar/stellar-sdk@<version>`; a full spec (or a fork) works too. The `package.json` aliases and all report labels are generated from this, so it's the only thing you edit.
+
+**Permanent change** (updates `versions.json` + aliases):
+
+```bash
+npm run set-versions 15.1.0 16.0.0-rc.2
+npm install
+npm run benchmark && npm run smoke && npm run perf && npm run net
+```
+
+**Temporary override** (leaves `versions.json` unchanged, e.g. for CI):
+
+```bash
+SDK_CANDIDATE=16.0.0-rc.2 npm run sync-versions
+npm install
+```
+
+This leaves `versions.json` untouched but does rewrite `package.json` (and the lockfile on install), so the working tree will be dirty. That's expected for a throwaway/CI run; don't commit it. Use `npm install` (not `npm ci`) after a sync, since the lockfile won't match until the install runs.
+
+Either way, report headers and tables pick up the new version strings automatically (read from the installed packages). So when a new v16 build lands, it's a one-line config change.
 
 `smoke` covers Node and a simulated browser environment out of the box. The other runtimes are optional and skipped if absent; install them to fill in the matrix:
 
 ```bash
 curl -fsSL https://bun.sh/install | bash        # Bun
 curl -fsSL https://deno.land/install.sh | sh    # Deno
-npm install -D wrangler --ignore-scripts        # Cloudflare Workers (workerd)
+npm install -D wrangler                         # Cloudflare Workers (workerd)
 ```
 
 **Testing your own app?** Point a fixture at your real entry imports, or just `npm install @stellar/stellar-sdk@16.0.0-rc.1` in your project and run your own build + tests.
@@ -82,11 +112,13 @@ npm install -D wrangler --ignore-scripts        # Cloudflare Workers (workerd)
 ## Layout
 
 ```
+versions.json     the two SDK versions under comparison (source of truth)
+lib/versions.mjs  resolves the baseline/candidate slots + report folder
 fixtures/         bundle-size entry files, one per scenario per version
-scripts/          analyze.mjs — bundle benchmark + report generator
+scripts/          analyze.mjs (bundle benchmark) + set/sync-versions helpers
 runtime/          smoke.mjs (the operations) + per-runtime runners + run-all.mjs
 perf/             micro/cold-import/run-perf (speed) + net-bench/run-net (transport)
-reports/          bundle-report.md, runtime-report.md, perf-report.md, network-report.md
+reports/          <candidate>-vs-<baseline>/*.md (committed); meta/ (ignored)
 .size-limit.json  bundle-size budgets for `npm run size`
 ```
 

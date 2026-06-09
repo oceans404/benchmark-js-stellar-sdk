@@ -1,25 +1,25 @@
 [
   {
-    "name": "v16 — full SDK (import * as)",
-    "path": "fixtures/full.v16.js",
+    "name": "candidate — full SDK (import * as)",
+    "path": "fixtures/full.candidate.js",
     "gzip": true,
     "running": false
   },
   {
-    "name": "v16 — RPC only (/rpc)",
-    "path": "fixtures/rpc-only.v16.js",
+    "name": "candidate — RPC only (/rpc)",
+    "path": "fixtures/rpc-only.candidate.js",
     "gzip": true,
     "running": false
   },
   {
-    "name": "v16 — classic Horizon app",
-    "path": "fixtures/horizon-classic.v16.js",
+    "name": "candidate — classic Horizon app",
+    "path": "fixtures/horizon-classic.candidate.js",
     "gzip": true,
     "running": false
   },
   {
-    "name": "v16 — contract client (/contract)",
-    "path": "fixtures/contract.v16.js",
+    "name": "candidate — contract client (/contract)",
+    "path": "fixtures/contract.candidate.js",
     "gzip": true,
     "running": false
   }

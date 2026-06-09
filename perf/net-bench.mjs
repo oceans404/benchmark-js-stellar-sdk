@@ -1,7 +1,7 @@
 // Transport benchmark for ONE client config against a loopback server.
 //
 // Run as: node perf/net-bench.mjs <config> <port> <address> <out.json>
-//   config: v15 | v16-fetch | v16-axios
+//   config: baseline | candidate-fetch | candidate-axios
 // Imports only the requested build (the parent isolates each in its own process)
 // and benchmarks `Horizon.Server.loadAccount()` against http://127.0.0.1:<port>,
 // which returns a fixed account payload instantly. So this times the SDK's
@@ -12,7 +12,11 @@ import { writeFileSync } from "node:fs";
 
 const [config, portStr, address, outFile] = process.argv.slice(2);
 const spec =
-  config === "v15" ? "sdk-v15" : config === "v16-axios" ? "sdk-v16/axios" : "sdk-v16";
+  config === "baseline"
+    ? "sdk-baseline"
+    : config === "candidate-axios"
+      ? "sdk-candidate/axios"
+      : "sdk-candidate";
 
 let out;
 try {

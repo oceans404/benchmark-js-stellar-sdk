@@ -1,22 +1,23 @@
-// Hot-path microbenchmarks for ONE version of @stellar/stellar-sdk.
+// Hot-path microbenchmarks for ONE role (baseline or candidate).
 //
-// Run as: node perf/micro.mjs <v15|v16> <out.json>
-// It imports only the requested version (process isolation is the parent's job,
-// run-perf.mjs spawns one of these per version) and writes tinybench results as
-// JSON to <out.json>. stdout is left for tinybench/SDK noise; only the file is
-// parsed by the parent.
+// Run as: node perf/micro.mjs <baseline|candidate> <out.json>
+// It imports only the requested role's SDK (process isolation is the parent's
+// job; run-perf.mjs spawns one of these per role) and writes tinybench results
+// as JSON to <out.json>. stdout is left for tinybench/SDK noise; only the file
+// is parsed by the parent.
 
 import { Bench } from "tinybench";
 import { writeFileSync } from "node:fs";
+import { ROLES, alias } from "../lib/versions.mjs";
 
-const version = process.argv[2];
+const role = process.argv[2];
 const outFile = process.argv[3];
-if (!["v15", "v16"].includes(version) || !outFile) {
-  console.error("usage: node perf/micro.mjs <v15|v16> <out.json>");
+if (!ROLES.includes(role) || !outFile) {
+  console.error("usage: node perf/micro.mjs <baseline|candidate> <out.json>");
   process.exit(2);
 }
 
-const S = await import(version === "v15" ? "sdk-v15" : "sdk-v16");
+const S = await import(alias(role));
 
 // Fixed inputs, built once outside the timed functions.
 const kp = S.Keypair.random();
@@ -106,4 +107,4 @@ const results = bench.tasks.map((t) => {
   };
 });
 
-writeFileSync(outFile, JSON.stringify({ version, node: process.version, results, skipped }, null, 2));
+writeFileSync(outFile, JSON.stringify({ role, node: process.version, results, skipped }, null, 2));

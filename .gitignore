@@ -1,9 +1,9 @@
 # Dependencies
 node_modules/
 
-# Generated artifacts — the reports/*.md files ARE committed (source of truth);
-# only the raw esbuild metafiles are not.
-reports/meta/
+# Generated artifacts — reports are committed (source of truth) under
+# reports/<candidate>-vs-<baseline>/; only the raw esbuild metafiles are not.
+reports/*/meta/
 
 # Tool / runtime state
 .wrangler/
