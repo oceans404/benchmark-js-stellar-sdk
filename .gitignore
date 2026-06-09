@@ -1,0 +1,25 @@
+# Dependencies
+node_modules/
+
+# Generated artifacts — the reports/*.md files ARE committed (source of truth);
+# only the raw esbuild metafiles are not.
+reports/meta/
+
+# Tool / runtime state
+.wrangler/
+runtime/.browser-entry.mjs
+
+# Logs
+*.log
+npm-debug.log*
+
+# Environment
+.env
+.env.*
+
+# Editors / OS
+.vscode/
+.idea/
+*.swp
+.DS_Store
+Thumbs.db

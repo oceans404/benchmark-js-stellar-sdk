@@ -1,0 +1,7 @@
+# Cloudflare Workers config for the edge smoke test.
+# Deliberately NO `compatibility_flags = ["nodejs_compat"]`: we want to know
+# whether v16 runs on a bare edge runtime without Node polyfills. Add the flag
+# only to test the "works with nodejs_compat" fallback path separately.
+name = "stellar-sdk-edge-smoke"
+main = "worker.mjs"
+compatibility_date = "2025-01-01"

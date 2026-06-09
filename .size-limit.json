@@ -1,0 +1,26 @@
+[
+  {
+    "name": "v16 — full SDK (import * as)",
+    "path": "fixtures/full.v16.js",
+    "gzip": true,
+    "running": false
+  },
+  {
+    "name": "v16 — RPC only (/rpc)",
+    "path": "fixtures/rpc-only.v16.js",
+    "gzip": true,
+    "running": false
+  },
+  {
+    "name": "v16 — classic Horizon app",
+    "path": "fixtures/horizon-classic.v16.js",
+    "gzip": true,
+    "running": false
+  },
+  {
+    "name": "v16 — contract client (/contract)",
+    "path": "fixtures/contract.v16.js",
+    "gzip": true,
+    "running": false
+  }
+]
