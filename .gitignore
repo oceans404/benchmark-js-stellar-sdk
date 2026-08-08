@@ -23,3 +23,6 @@ npm-debug.log*
 *.swp
 .DS_Store
 Thumbs.db
+
+# Locally built SDK tarballs used as an unpublished `candidate` (see README)
+.local-sdk/

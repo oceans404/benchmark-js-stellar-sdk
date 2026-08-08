@@ -9,7 +9,7 @@
 
 import { build, version as esbuildVersion } from "esbuild";
 import { gzipSync, brotliCompressSync } from "node:zlib";
-import { mkdirSync, writeFileSync } from "node:fs";
+import { mkdirSync, writeFileSync, readFileSync } from "node:fs";
 import { fileURLToPath } from "node:url";
 import { dirname, join, relative } from "node:path";
 import { ROLES, resolvedVersion, reportDir } from "../lib/versions.mjs";
@@ -21,6 +21,30 @@ const metaDir = join(outDir, "meta");
 mkdirSync(metaDir, { recursive: true });
 
 const labels = { baseline: resolvedVersion("baseline"), candidate: resolvedVersion("candidate") };
+
+// Describe how a bundler actually resolves the baseline instead of assuming it.
+// v15 shipped a prebuilt, un-tree-shakeable `browser` UMD root and no ESM entry;
+// v16+ are ESM-first, so the UMD caveat only applies to some baselines.
+const baselinePkg = JSON.parse(
+  readFileSync(join(root, "node_modules", "sdk-baseline", "package.json"), "utf8"),
+);
+const baselineHasUmdRoot = Boolean(baselinePkg.browser);
+const baselineSourceFormat = baselinePkg.module ? "ESM" : "CJS";
+
+// Deltas are reported in the direction they actually go — the candidate is not
+// always the smaller build.
+const direction = (p) => (p >= 0 ? "smaller" : "larger");
+const fmtDelta = (p) => `**${Math.abs(p).toFixed(0)}% ${direction(p)}**`;
+// [min, max] of pct-smaller values; reads correctly even when the range straddles
+// zero (one scenario smaller, another larger).
+const fmtRange = ([lo, hi]) => {
+  if (direction(lo) !== direction(hi))
+    return `${Math.abs(lo).toFixed(0)}% ${direction(lo)} to ${Math.abs(hi).toFixed(0)}% ${direction(hi)}`;
+  // Same direction: order by magnitude, which is not the order of the raw values
+  // when both are negative (candidate larger).
+  const [a, b] = [Math.abs(lo), Math.abs(hi)].sort((x, y) => x - y);
+  return `${a.toFixed(0)}–${b.toFixed(0)}% ${direction(hi)}`;
+};
 
 // Each scenario maps to two fixtures: <key>.baseline.js and <key>.candidate.js
 const SCENARIOS = [
@@ -150,12 +174,17 @@ for (const s of SCENARIOS) {
 }
 lines.push("");
 lines.push(
-  "Negative Δ means the candidate is smaller. **These are default-resolution numbers:** a " +
-    "bundler resolves the baseline's root import to its prebuilt `browser` UMD bundle (which " +
-    "cannot be tree-shaken) and the candidate to ESM source, so the `full` / `horizon-classic` " +
-    "deltas mix a real code-size win with that build-input difference. The `/rpc` and " +
-    "`/contract` rows have the baseline also resolve source (CJS vs ESM). The control below " +
-    "isolates the real difference.",
+  "Negative Δ means the candidate is smaller. **These are default-resolution numbers:** each " +
+    "version is bundled the way a real bundler would resolve it. " +
+    (baselineHasUmdRoot
+      ? "The baseline's root import resolves its prebuilt `browser` UMD bundle (which cannot be " +
+        "tree-shaken) and the candidate resolves ESM source, so the `full` / `horizon-classic` " +
+        "deltas mix a real code-size difference with that build-input difference. The `/rpc` and " +
+        "`/contract` rows have the baseline also resolve source. The control below isolates the " +
+        "real difference."
+      : `The baseline ships no prebuilt \`browser\` root, so both versions resolve ${baselineSourceFormat} ` +
+        "source in every scenario. These deltas are a like-for-like code-size comparison; the " +
+        "control below is a secondary check under `platform: node`."),
 );
 lines.push("");
 
@@ -172,15 +201,20 @@ const rootR = range(["full", "horizon-classic"]);
 lines.push("## Build-input fairness (control: bundle from source)");
 lines.push("");
 lines.push(
-  "The baseline has no root ESM build, so its default root import resolves a prebuilt `browser` " +
-    "UMD bundle that can't be tree-shaken. Re-bundling each version from its **source** entry " +
-    "(baseline via CJS `main`, candidate via ESM `module`) isolates the real code-size difference. " +
+  (baselineHasUmdRoot
+    ? "The baseline has no root ESM build, so its default root import resolves a prebuilt `browser` " +
+      "UMD bundle that can't be tree-shaken. Re-bundling each version from its **source** entry " +
+      `(baseline via ${baselineSourceFormat}, candidate via ESM \`module\`) isolates the real code-size difference. `
+    : "Both versions already resolve source by default, so this control mainly re-checks the " +
+      "headline numbers under different build settings rather than correcting for a UMD baseline. ") +
     "These control builds use `platform: node` (node built-ins external), so they are NOT " +
     "directly comparable to the `platform: browser` rows above — compare baseline-source to " +
     "candidate-source *within* this table.",
 );
 lines.push("");
-lines.push("| Scenario | baseline default (UMD) | baseline source (CJS) | candidate source (ESM) | candidate vs baseline source |");
+lines.push(
+  `| Scenario | baseline default | baseline source (${baselineSourceFormat}) | candidate source (ESM) | candidate vs baseline source |`,
+);
 lines.push("| --- | --- | --- | --- | --- |");
 const ctlDelta = {};
 for (const k of CONTROL_KEYS) {
@@ -197,12 +231,15 @@ for (const k of CONTROL_KEYS) {
 }
 lines.push("");
 lines.push(
-  "**Summary:** bundled from source (baseline CJS vs candidate ESM), the candidate is " +
-    `${ctlDelta["full"] != null ? `**${ctlDelta["full"].toFixed(0)}% smaller**` : "n/a"} for the full SDK and ` +
-    `${ctlDelta["horizon-classic"] != null ? `**${ctlDelta["horizon-classic"].toFixed(0)}% smaller**` : "n/a"} for a classic Horizon import. ` +
-    `Subpath imports (\`/rpc\`, \`/contract\`) show ${sub ? `${sub[0].toFixed(0)}–${sub[1].toFixed(0)}%` : "n/a"} smaller. ` +
-    `The larger ${rootR ? `~${rootR[1].toFixed(0)}%` : ""} for default root imports also reflects the baseline ` +
-    "shipping a non-tree-shakeable UMD bundle, not only less code in the candidate.",
+  `**Summary:** bundled from source (baseline ${baselineSourceFormat} vs candidate ESM), the candidate is ` +
+    `${ctlDelta["full"] != null ? fmtDelta(ctlDelta["full"]) : "n/a"} for the full SDK and ` +
+    `${ctlDelta["horizon-classic"] != null ? fmtDelta(ctlDelta["horizon-classic"]) : "n/a"} for a classic Horizon import. ` +
+    `Subpath imports (\`/rpc\`, \`/contract\`) show ${sub ? fmtRange(sub) : "n/a"}. ` +
+    (baselineHasUmdRoot
+      ? `The larger ${rootR ? `~${Math.abs(rootR[1]).toFixed(0)}%` : ""} for default root imports also reflects the baseline ` +
+        "shipping a non-tree-shakeable UMD bundle, not only a code-size difference in the candidate."
+      : "Both versions resolve source in the default numbers too, so the headline table and this " +
+        "control point the same direction."),
 );
 lines.push("");
 
@@ -237,13 +274,17 @@ lines.push("## Caveats");
 lines.push("");
 lines.push(
   "- Each version is resolved the way a real bundler would resolve it (default " +
-    "export conditions). The candidate resolves ESM source; the baseline's **root** import " +
-    "resolves its `browser` field, a prebuilt UMD bundle — which is why the baseline `full` and " +
-    "`horizon-classic` are an identical size (no tree-shaking) and the baseline watch row shows " +
-    "nothing (esbuild can't see module names inside the prebuilt bundle). Baseline subpaths " +
-    "(`/rpc`, `/contract`) have no `browser` field and do resolve source. This is the honest " +
-    "user-facing number, not a forced same-entry comparison — but treat the baseline watch " +
-    "column as unreliable.",
+    "export conditions). " +
+    (baselineHasUmdRoot
+      ? "The candidate resolves ESM source; the baseline's **root** import " +
+        "resolves its `browser` field, a prebuilt UMD bundle — which is why the baseline `full` and " +
+        "`horizon-classic` are an identical size (no tree-shaking) and the baseline watch row shows " +
+        "nothing (esbuild can't see module names inside the prebuilt bundle). Baseline subpaths " +
+        "(`/rpc`, `/contract`) have no `browser` field and do resolve source. This is the honest " +
+        "user-facing number, not a forced same-entry comparison — but treat the baseline watch " +
+        "column as unreliable."
+      : "Neither version ships a prebuilt `browser` root, so both resolve source in every " +
+        "scenario and the watch column is meaningful for both."),
 );
 lines.push(
   "- `platform: browser`. A scenario that fails to bundle shows a failure row in the " +

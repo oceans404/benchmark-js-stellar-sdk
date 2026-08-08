@@ -59,8 +59,13 @@ const server = createServer((_req, res) => {
 await new Promise((r) => server.listen(0, "127.0.0.1", r));
 const port = server.address().port;
 
+// The baseline config imports the plain `sdk-baseline` root, so its transport is
+// whatever that version ships by default: axios through v15, native fetch from
+// v16 on. Label it from the installed version rather than assuming axios.
+const baseTransport = Number(baseLabel.split(".")[0]) >= 16 ? "fetch" : "axios";
+
 const CONFIGS = [
-  { key: "baseline", label: `baseline ${baseLabel} (axios)` },
+  { key: "baseline", label: `baseline ${baseLabel} (${baseTransport})` },
   { key: "candidate-fetch", label: `candidate ${candLabel} (fetch)` },
   { key: "candidate-axios", label: `candidate ${candLabel} (axios opt-in)` },
 ];
@@ -128,7 +133,7 @@ lines.push("");
 const parts = [];
 if (baseR?.hz && candFetch?.hz) {
   const d = pct(baseR.hz, candFetch.hz);
-  parts.push(`the candidate (fetch) is ${wash(d) ? "about the same as" : `${d > 0 ? `${d.toFixed(0)}% faster than` : `${(-d).toFixed(0)}% slower than`}`} the baseline (axios)`);
+  parts.push(`the candidate (fetch) is ${wash(d) ? "about the same as" : `${d > 0 ? `${d.toFixed(0)}% faster than` : `${(-d).toFixed(0)}% slower than`}`} the baseline (${baseTransport})`);
 }
 if (candFetch?.hz && candAxios?.hz) {
   const d = pct(candAxios.hz, candFetch.hz);
@@ -136,13 +141,24 @@ if (candFetch?.hz && candAxios?.hz) {
 }
 lines.push("## Summary");
 lines.push("");
+// When baseline and candidate both default to fetch, a baseline-vs-candidate gap
+// is SDK overhead, not a transport difference; the keep-alive explanation only
+// applies to the fetch-vs-axios pairs.
+const gapNote =
+  baseTransport === "axios"
+    ? "This gap is **likely connection-reuse behavior** " +
+      "(native fetch/undici pools keep-alive connections by default; the axios client may not) " +
+      "rather than per-operation CPU cost — though this benchmark does not toggle keep-alive to " +
+      "isolate it. And real-world calls are dominated by network latency, so this rarely decides " +
+      "request speed in production."
+    : "Both baseline and candidate default to native `fetch`, so the baseline-vs-candidate " +
+      "difference is SDK request/parse overhead, not a transport change; only the axios opt-in " +
+      "row is a transport comparison. Real-world calls are dominated by network latency, so " +
+      "none of this usually decides request speed in production.";
+
 lines.push(
   parts.length
-    ? `${parts.join("; ")} on loopback throughput. This gap is **likely connection-reuse behavior** ` +
-        "(native fetch/undici pools keep-alive connections by default; the axios client may not) " +
-        "rather than per-operation CPU cost — though this benchmark does not toggle keep-alive to " +
-        "isolate it. And real-world calls are dominated by network latency, so this rarely decides " +
-        "request speed in production."
+    ? `${parts.join("; ")} on loopback throughput. ${gapNote}`
     : "Benchmark did not produce comparable numbers; see errors below.",
 );
 lines.push("");

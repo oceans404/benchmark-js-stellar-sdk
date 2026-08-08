@@ -44,10 +44,19 @@ const buildTx = () => {
     .setTimeout(30)
     .build();
 };
+// v17 renamed `toXDR` -> `toXdr` and `TransactionBuilder.fromXDR` -> `fromXdr`
+// with no back-compat aliases; bind to whichever the installed version exposes
+// so the same benchmark measures the same work in both.
+const toXdr = (t) => (t.toXdr ? t.toXdr() : t.toXDR());
+const fromXdr = (xdr) =>
+  S.TransactionBuilder.fromXdr
+    ? S.TransactionBuilder.fromXdr(xdr, S.Networks.TESTNET)
+    : S.TransactionBuilder.fromXDR(xdr, S.Networks.TESTNET);
+
 const signedXdr = (() => {
   const t = buildTx();
   t.sign(kp);
-  return t.toXDR();
+  return toXdr(t);
 })();
 
 // [name, fn]. Each is feature-probed once before being added; anything that
@@ -62,10 +71,10 @@ const candidates = [
     () => {
       const t = buildTx();
       t.sign(kp);
-      return t.toXDR();
+      return toXdr(t);
     },
   ],
-  ["fromXDR", () => S.TransactionBuilder.fromXDR(signedXdr, S.Networks.TESTNET)],
+  ["fromXDR", () => fromXdr(signedXdr)],
   ["nativeToScVal", () => { for (const v of scVals) S.nativeToScVal(v); }],
   [
     "ScInt round-trip",

@@ -11,6 +11,13 @@
 // It deliberately does NOT install any polyfills, so a missing global
 // (e.g. `Buffer` on an edge runtime) surfaces as a real failure.
 
+// v17 renamed `toXDR` -> `toXdr` and `TransactionBuilder.fromXDR` -> `fromXdr`
+// with no back-compat aliases, so call whichever the installed version exposes.
+// This is a naming difference, not a runtime-compatibility one.
+const txToXdr = (tx) => (tx.toXdr ? tx.toXdr() : tx.toXDR());
+const txFromXdr = (TB, xdr, passphrase) =>
+  TB.fromXdr ? TB.fromXdr(xdr, passphrase) : TB.fromXDR(xdr, passphrase);
+
 export async function runSmoke(sdk) {
   const checks = [];
   const check = async (name, fn) => {
@@ -64,11 +71,11 @@ export async function runSmoke(sdk) {
       .setTimeout(30)
       .build();
     tx.sign(kp);
-    const xdr = tx.toXDR();
+    const xdr = txToXdr(tx);
     if (typeof xdr !== "string" || xdr.length === 0)
       throw new Error("toXDR produced empty output");
     // round-trip back
-    const parsed = sdk.TransactionBuilder.fromXDR(xdr, sdk.Networks.TESTNET);
+    const parsed = txFromXdr(sdk.TransactionBuilder, xdr, sdk.Networks.TESTNET);
     if (!parsed) throw new Error("fromXDR failed");
   });
 

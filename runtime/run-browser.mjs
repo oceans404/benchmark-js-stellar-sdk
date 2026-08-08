@@ -14,6 +14,10 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { pathToFileURL } from "node:url";
 import { report } from "./smoke.mjs";
+import { resolvedVersion } from "../lib/versions.mjs";
+
+// Label the verdict with the version actually under test, not a hardcoded one.
+const candidateVersion = `v${resolvedVersion("candidate")}`;
 
 // The entry must live inside the project so esbuild resolves `sdk-candidate`
 // from node_modules and `./smoke.mjs` relatively. Output goes to a temp dir.
@@ -58,7 +62,7 @@ try {
 const ok = report("browser (simulated: Node, Buffer global removed)", checks);
 console.log(
   ok
-    ? "  → v16 stands alone without a Buffer global (bundled shim). Note: simulated, not a real browser."
-    : "  → v16 relies on a Buffer global or a missing browser API here; see failures above.",
+    ? `  → ${candidateVersion} stands alone without a Buffer global (bundled shim). Note: simulated, not a real browser.`
+    : `  → ${candidateVersion} relies on a Buffer global or a missing browser API here; see failures above.`,
 );
 process.exit(ok ? 0 : 1);

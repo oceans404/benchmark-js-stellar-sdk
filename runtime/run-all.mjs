@@ -110,7 +110,7 @@ lines.push(
 );
 lines.push(
   '- **"Browser (simulated)" is not a real browser** — it is Node with the `Buffer` ' +
-    "global deleted, which tests whether v16 stands alone without that global. A headless-" +
+    `global deleted, which tests whether ${candidate} stands alone without that global. A headless-` +
     "browser (Playwright) run would be stronger.",
 );
 lines.push(
