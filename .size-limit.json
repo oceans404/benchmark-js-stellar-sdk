@@ -2,25 +2,21 @@
   {
     "name": "candidate — full SDK (import * as)",
     "path": "fixtures/full.candidate.js",
-    "gzip": true,
-    "running": false
+    "gzip": true
   },
   {
     "name": "candidate — RPC only (/rpc)",
     "path": "fixtures/rpc-only.candidate.js",
-    "gzip": true,
-    "running": false
+    "gzip": true
   },
   {
     "name": "candidate — classic Horizon app",
     "path": "fixtures/horizon-classic.candidate.js",
-    "gzip": true,
-    "running": false
+    "gzip": true
   },
   {
     "name": "candidate — contract client (/contract)",
     "path": "fixtures/contract.candidate.js",
-    "gzip": true,
-    "running": false
+    "gzip": true
   }
 ]
