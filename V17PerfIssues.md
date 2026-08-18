@@ -1,10 +1,57 @@
-# v17.0.0-rc.1 performance report
+# v17.0.0 performance report
+
+Originally written 2026-08-07 against a `v17-feature-branch` build. **Read the correction section first:** two of its claims do not hold against published packages. The numbered findings below keep their original measurements and wording.
 
 Benchmarked v17.0.0-rc.1 (`v17-feature-branch` at `f7357043`, packed locally) against `@stellar/stellar-sdk@16.2.0`. Node v24.13.0, macOS, single machine, single run. Treat anything under 5 percent as noise. Everything below is far outside that band.
 
 The suite reported four regressions: `fromXDR` -71 percent, `build+sign+toXDR` -16 percent, cold import +164 percent, bundles 19 to 47 percent larger. Findings 1 through 5 explain the first two. Finding 6 explains the other two.
 
 Each cause was confirmed by patching it and re-measuring. Every patched build was checked against a 14 item differential XDR corpus (transaction envelopes including fee bump and multi operation, ScVal variants, memo, asset) requiring byte identical re-encoding and identical decoded values, plus the 5 runtime smoke suite.
+
+## Correction and status, `17.0.0-rc.2` (measured 2026-08-18)
+
+**Finding 1 never reached a published package.** Its 630k ops/s came from branch build `f7357043`. Published `17.0.0-rc.1` measures 69,747k, so the throw-on-the-common-path defect was fixed before rc.1 shipped. The finding was real when written; do not quote "267x slower" against any released version.
+
+**Findings 2, 3 and 5 landed and bought nothing measurable.** The code is in `@stellar/js-xdr@5.0.0-rc.2`, verified by diffing the packed tarballs: `Reader` and `Writer` now hold one reused `#view`, `readUnionArm` builds one object instead of spreading. Published rc.1 versus rc.2, same machine, same session, three trials, 216-byte `TransactionEnvelope`:
+
+| | 16.2.0 | rc.1 | rc.2 |
+| --- | --- | --- | --- |
+| decode from raw bytes | 620-632k | 833-870k | 797-842k |
+| decode from base64 | 588-601k | 122-124k | 121-122k |
+| encode to raw bytes | 700-731k | 569-575k | 564-588k |
+
+**js-xdr itself did not get faster on this schema**, which is the surprising part. `TransactionEnvelope.schema._read` measures 1,018k ops/s on rc.1 and 1,047k on rc.2. This is not SDK code swamping the win: js-xdr is 85 percent of SDK decode time (0.97 of 1.14 µs). js-xdr PR #150 reports 5-6x on "a Stellar-shaped schema" and the SDK's real schema shows a wash. Untested candidates: the correctness PRs merged after #150 (#151 to #155, which added per-read bounds checks) ate the gains, or V8's escape analysis had already eliminated the short-lived allocations.
+
+Measure at the SDK boundary before investing in finding 4, which is the same layer and predicted a similar win.
+
+The table also shows two things true since rc.1 and unchanged by rc.2: v17 decodes raw XDR **33 percent faster than v16**, so the class-per-type redesign is not what makes `fromXDR` look slow, and base64 is the entire `fromXDR` regression at 86 percent of the base64 path.
+
+### Finding 6 is the whole remaining gap, and its verdict is wrong
+
+`atob` is not the problem, running at 17,650k ops/s. `uint8array-extras@1.5.0` decodes as `Uint8Array.from(atob(s), x => x.codePointAt(0))`, and `Uint8Array.from(str, mapFn)` walks the string through the iterator protocol with a per-character callback. On a 288-char payload:
+
+| | ops/s | vs the library |
+| --- | --- | --- |
+| `atob` alone, no byte copy | 17,650k | |
+| `Buffer.from(s, "base64")` (Node only) | 12,371k | 83x faster |
+| same `atob` + a `charCodeAt` loop | 3,223k | **22x faster** |
+| `uint8array-extras` `base64ToUint8Array` | 149k | baseline |
+
+All produce byte-identical output. So "an accepted trade with no fast path" is wrong: the fast path is portable and it is five lines. A `charCodeAt` loop needs no `Buffer`, runs in browsers, Node, Bun, Deno and workerd, and keeps the no-`Buffer` property that motivated the migration. `Uint8Array.fromBase64` is not in Node 24.13, so it cannot be the only path.
+
+This got more urgent: merged PR #1661 repointed `docs/UINT8ARRAY_MIGRATION.md` at `xdr.encodeBytes` / `xdr.decodeBytes`, thin wrappers over these functions, so the guide now steers every migrating user onto a path 67x slower than the `Buffer` call it replaces. #1611 and #1642 both already propose the wrapper this needs.
+
+| # | Finding | rc.2 status |
+| --- | --- | --- |
+| 1 | `StrKey.isValid` throws on the common path | Fixed **before published rc.1** |
+| 2 | `Reader` allocates per scalar read | In js-xdr 5.0.0-rc.2, no measurable SDK-level effect |
+| 3 | `readUnionArm` allocates twice per union | In js-xdr 5.0.0-rc.2, no measurable SDK-level effect |
+| 4 | Error path strings built eagerly | Open. Measure at the SDK boundary first |
+| 5 | `Writer` allocates per scalar write | In js-xdr 5.0.0-rc.2, no measurable SDK-level effect |
+| 6 | base64 replaced by a pure JS codec | **Open, and the whole `fromXDR` gap** |
+| 7 | Class per XDR type | Open, design trade. Cold import +173%, bundles +22 to +49%, unchanged |
+
+Full write-up: [`reports/17.0.0-rc.2-vs-16.2.0/findings.md`](reports/17.0.0-rc.2-vs-16.2.0/findings.md).
 
 ## Summary
 

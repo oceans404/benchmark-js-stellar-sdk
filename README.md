@@ -4,20 +4,21 @@ Independent, reproducible measurements of [`@stellar/stellar-sdk`](https://githu
 
 Everything runs against real installed packages, published or locally built, and is meant to be re-run on your own machine or adapted to your own app.
 
-**Currently configured pair: `17.0.0-rc.1` vs `16.2.0`.** v17.0.0-rc.1 was built from `v17-feature-branch` at `f7357043`, since it is not published to npm. See [Testing an unpublished build](#testing-an-unpublished-build).
+**Currently configured pair: `17.0.0-rc.2` vs `16.2.0`.** Both are published to npm, so no local build is needed (`17.0.0-rc.2` is on the `rc` dist-tag; `npm i @stellar/stellar-sdk@17` still 404s because npm excludes prereleases from ranges). For an unpublished build, see [Testing an unpublished build](#testing-an-unpublished-build).
 
 ## Reports (the source of truth)
 
 The numbers live in generated, committed reports. Each comparison gets its own folder, `reports/<candidate>-vs-<baseline>/`, so results from different pairs sit side by side.
 
-| Report | Question | Bottom line for 17.0.0-rc.1 vs 16.2.0 |
+| Report | Question | Bottom line for 17.0.0-rc.2 vs 16.2.0 |
 | --- | --- | --- |
-| [`bundle-report.md`](reports/17.0.0-rc.1-vs-16.2.0/bundle-report.md) | Smaller? | No. 19 to 47 percent larger gzipped. The `buffer` shim is gone from every bundle. |
-| [`runtime-report.md`](reports/17.0.0-rc.1-vs-16.2.0/runtime-report.md) | Runs where I deploy? | Yes. Passes on Node, Bun, Deno, simulated browser, and Cloudflare Workers. |
-| [`perf-report.md`](reports/17.0.0-rc.1-vs-16.2.0/perf-report.md) | Faster? | Mixed. `ScInt` +70 percent, but `fromXDR` -71 percent and cold import +164 percent. |
-| [`network-report.md`](reports/17.0.0-rc.1-vs-16.2.0/network-report.md) | Transport cost? | Roughly a wash. Both default to `fetch`; the axios opt-in is 21 percent slower. |
+| [`bundle-report.md`](reports/17.0.0-rc.2-vs-16.2.0/bundle-report.md) | Smaller? | No. 22 to 49 percent larger gzipped, and ~3 KB larger than rc.1. The `buffer` shim is gone from every bundle. |
+| [`runtime-report.md`](reports/17.0.0-rc.2-vs-16.2.0/runtime-report.md) | Runs where I deploy? | Yes. Passes on Node, Bun, Deno, simulated browser, and Cloudflare Workers. |
+| [`perf-report.md`](reports/17.0.0-rc.2-vs-16.2.0/perf-report.md) | Faster? | Mixed. `ScInt` +50 percent, but `fromXDR` -57 percent and cold import +173 percent. **Unchanged from rc.1** once machine drift is removed, see `findings.md`. |
+| [`network-report.md`](reports/17.0.0-rc.2-vs-16.2.0/network-report.md) | Transport cost? | A wash. Both default to `fetch`; the axios opt-in is 17 percent slower. |
+| [`findings.md`](reports/17.0.0-rc.2-vs-16.2.0/findings.md) | **Is v17 faster or slower?** | Slower where it counts. Decoding XDR from base64 is 5x slower, and that one dependency function is nearly the whole story: raw-byte decoding is 33 percent *faster*. Plus the bug list and a map to existing issues. |
 
-[**`V17PerfIssues.md`**](V17PerfIssues.md) is the follow-up investigation into the regressions above. Five of the six causes are fixable implementation defects rather than costs of v17's class-per-type XDR redesign. Each was confirmed by patching it and re-measuring.
+[**`V17PerfIssues.md`**](V17PerfIssues.md) is the follow-up investigation into the v17 regressions, with a correction header for what has since landed. Findings 2, 3 and 5 shipped in `@stellar/js-xdr@5.0.0-rc.2` but moved nothing at the SDK boundary; finding 1 turned out to be fixed before rc.1 published and should not be quoted against a released version. **Finding 6, the pure-JS base64 codec, is now the entire `fromXDR` regression**, and it is a five-line portable fix rather than the accepted trade it was originally called.
 
 > Single machine, single run. Directional, not a controlled lab result. Treat differences under 5 percent as a wash.
 
@@ -76,7 +77,7 @@ This prints the candidate's gzipped bundle size per scenario. It does **not** as
 The pair is configured in **`versions.json`**, the source of truth:
 
 ```json
-{ "baseline": "16.2.0", "candidate": "17.0.0-rc.1" }
+{ "baseline": "16.2.0", "candidate": "17.0.0-rc.2" }
 ```
 
 A bare version means `@stellar/stellar-sdk@<version>`. A full spec, a fork, or a `file:` path also works. The `package.json` aliases and all report labels are generated from this, so it is the only thing you edit.

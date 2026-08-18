@@ -35,6 +35,9 @@ const baselineSourceFormat = baselinePkg.module ? "ESM" : "CJS";
 // always the smaller build.
 const direction = (p) => (p >= 0 ? "smaller" : "larger");
 const fmtDelta = (p) => `**${Math.abs(p).toFixed(0)}% ${direction(p)}**`;
+// Signed percentage in the headline table's convention: positive = candidate
+// is larger. Takes a already-flipped value, so callers pass `-pctSmaller`.
+const fmtSigned = (p) => `${p > 0 ? "+" : ""}${p.toFixed(0)}%`;
 // [min, max] of pct-smaller values; reads correctly even when the range straddles
 // zero (one scenario smaller, another larger).
 const fmtRange = ([lo, hi]) => {
@@ -213,7 +216,7 @@ lines.push(
 );
 lines.push("");
 lines.push(
-  `| Scenario | baseline default | baseline source (${baselineSourceFormat}) | candidate source (ESM) | candidate vs baseline source |`,
+  `| Scenario | baseline default | baseline source (${baselineSourceFormat}) | candidate source (ESM) | Δ gzip (candidate vs baseline source) |`,
 );
 lines.push("| --- | --- | --- | --- | --- |");
 const ctlDelta = {};
@@ -225,8 +228,11 @@ for (const k of CONTROL_KEYS) {
     continue;
   }
   ctlDelta[k] = pctSmaller(c.baseline.gzip, c.candidate.gzip);
+  // Render with the SAME sign convention as the headline Δ gzip column
+  // (positive = candidate is larger). ctlDelta itself stays "percent smaller"
+  // because fmtDelta/fmtRange below read it that way.
   lines.push(
-    `| ${k} | ${def?.ok ? kb(def.gzip) : "—"} | ${kb(c.baseline.gzip)} | ${kb(c.candidate.gzip)} | ${ctlDelta[k].toFixed(0)}% |`,
+    `| ${k} | ${def?.ok ? kb(def.gzip) : "—"} | ${kb(c.baseline.gzip)} | ${kb(c.candidate.gzip)} | ${fmtSigned(-ctlDelta[k])} |`,
   );
 }
 lines.push("");
@@ -264,11 +270,50 @@ for (const s of SCENARIOS) {
   }
 }
 lines.push("");
-lines.push(
-  "Takeaway: the candidate's tree-shaking is real (Horizon-only `eventsource`/`smol-toml` drop " +
-    "out of narrow imports) but not yet clean — the HTTP client (`feaxios`) and a `buffer` shim " +
-    "still ride along in every candidate bundle.",
-);
+// Derive the takeaway from the watch data. Hardcoding it means a module that
+// later drops out (or creeps back in) ships as a false claim in the report.
+{
+  const okScenarios = SCENARIOS.filter((s) => results[s.key].candidate.ok);
+  const narrow = okScenarios.filter((s) => s.key !== "full");
+  const inEvery = (role, keys) =>
+    WATCH.filter((w) => keys.length > 0 && keys.every((s) => results[s.key][role].watch[w]));
+  // Present in the widest import but absent from at least one narrower one.
+  // `some`, not `every`: a Horizon-only module legitimately stays in the
+  // Horizon scenario, and `every` would refuse to credit it anywhere.
+  const droppedFromNarrow = WATCH.filter(
+    (w) =>
+      results.full.candidate.ok &&
+      results.full.candidate.watch[w] &&
+      narrow.some((s) => !results[s.key].candidate.watch[w]),
+  );
+  const alwaysPresent = inEvery("candidate", okScenarios);
+  const goneVsBaseline = WATCH.filter(
+    (w) =>
+      okScenarios.length > 0 &&
+      okScenarios.every((s) => results[s.key].baseline.ok && results[s.key].baseline.watch[w]) &&
+      okScenarios.every((s) => !results[s.key].candidate.watch[w]),
+  );
+  const list = (xs) => xs.map((x) => `\`${x}\``).join("/");
+  const parts = [];
+  if (droppedFromNarrow.length)
+    parts.push(`${list(droppedFromNarrow)} drop out of narrower imports`);
+  if (goneVsBaseline.length)
+    parts.push(`${list(goneVsBaseline)} is gone from every candidate bundle, and was in every baseline one`);
+  const good = parts.length ? `the candidate's tree-shaking is real (${parts.join("; ")})` : null;
+  const bad = alwaysPresent.length
+    ? `${list(alwaysPresent)} still rides along in every candidate bundle`
+    : null;
+  lines.push(
+    "Takeaway: " +
+      (good && bad
+        ? `${good}, but not yet clean — ${bad}.`
+        : good
+          ? `${good}, and nothing on the watch list rides along in every bundle.`
+          : bad
+            ? `${bad}.`
+            : "nothing on the watch list is present in every candidate bundle."),
+  );
+}
 lines.push("");
 lines.push("## Caveats");
 lines.push("");
