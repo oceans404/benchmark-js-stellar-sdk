@@ -1,5 +1,5 @@
 {
   "//": "The two SDK versions the benchmarks compare. This is the source of truth. Edit, then run `npm run sync-versions && npm install`. Or change both at once with `npm run set-versions <baseline> <candidate>`. Override temporarily (without editing this file) via the SDK_BASELINE / SDK_CANDIDATE env vars. A bare version means @stellar/stellar-sdk@<version>; a full spec (e.g. @stellar/stellar-sdk@16.0.0-rc.2, or a fork) also works.",
-  "baseline": "16.2.0",
-  "candidate": "17.0.0-rc.2"
+  "baseline": "17.0.0-rc.2",
+  "candidate": "17.0.0"
 }
